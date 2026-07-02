@@ -5,6 +5,9 @@ import rateLimit from 'express-rate-limit';
 import authRoutes from './routes/auth.js';
 import chatRoutes from './routes/chat.js';
 import { initDb } from './db/database.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
 
@@ -12,8 +15,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Directive 1.1: Strict CORS configuration
+const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173';
 app.use(cors({
-    origin: 'http://localhost:5173',
+    origin: corsOrigin,
     credentials: true
 }));
 
@@ -33,6 +37,19 @@ app.use('/api', globalLimiter);
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api', chatRoutes);
+
+// Serve frontend static files when available (production build)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const frontendDist = path.join(__dirname, 'frontend', 'dist');
+
+if (fs.existsSync(frontendDist)) {
+    app.use(express.static(frontendDist));
+
+    app.get('*', (req, res) => {
+        res.sendFile(path.join(frontendDist, 'index.html'));
+    });
+}
 
 // Directive 4.2: Catch-All 4-parameter Error Handler
 app.use((err, req, res, next) => {
