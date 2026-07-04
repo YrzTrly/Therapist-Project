@@ -1,0 +1,359 @@
+:root {
+  /* --- Strict Organic Palette (Hex Mapped) --- */
+  --mint: #EBF3F0;
+  --mint-dark: #d5e5df;
+  --sage: #92A682;
+  --sage-dark: #768a67;
+  --lavender-blush: #F8ECEE; /* Soft Cream */
+  --lavender-blush-dark: #ebd3d6;
+  
+  --evergreen: #244C3D;      /* Deep contrast base */
+  --dark-amethyst: #271E3D;  /* Accent deep contrast */
+  
+  --muted-teal: #9AC1B1;
+  --pacific-cyan: #32525A;
+  
+  /* --- Semantic UI Colors --- */
+  --bg-gradient: linear-gradient(135deg, var(--mint) 0%, var(--lavender-blush) 100%);
+  --card-bg: rgba(248, 236, 238, 0.94); /* Soft Cream base */
+  --card-border: var(--sage);
+  --text-main: var(--evergreen); /* Default dark contrast */
+  --text-muted: #4e635a;
+  --shadow-color: rgba(36, 76, 61, 0.06);
+
+  font-family: 'Nunito', system-ui, -apple-system, sans-serif;
+  color: var(--text-main);
+  background: var(--bg-gradient);
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+/* Dark Mode Adaptation - Keeps Earthy & Calm Palette but reverses luminance */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mint: #15221d;
+    --mint-dark: #0c1411;
+    --sage: #2a3c26;
+    --sage-dark: #1f2c1b;
+    --lavender-blush: #1d1516; /* Deep charcoal cream */
+    --lavender-blush-dark: #120c0d;
+    
+    --evergreen: #EBF3F0;       /* Reversed contrast */
+    --dark-amethyst: #eccdd2;
+    
+    --muted-teal: #4b7463;
+    --pacific-cyan: #96bcc5;
+    
+    --bg-gradient: linear-gradient(135deg, var(--mint) 0%, var(--lavender-blush) 100%);
+    --card-bg: rgba(29, 21, 22, 0.94);
+    --card-border: var(--sage);
+    --text-main: var(--evergreen);
+    --text-muted: #889e93;
+    --shadow-color: rgba(0, 0, 0, 0.35);
+  }
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg-gradient);
+  font-family: 'Nunito', sans-serif;
+  color: var(--text-main);
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 100%;
+}
+
+/* Background floating organic leaf/cloud drifts */
+.bg-floating-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.floating-shape {
+  position: absolute;
+  border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
+  filter: blur(80px);
+  opacity: 0.15;
+  animation: drift 45s infinite ease-in-out;
+}
+
+@media (prefers-color-scheme: dark) {
+  .floating-shape {
+    opacity: 0.08;
+  }
+}
+
+.shape-1 {
+  width: 450px;
+  height: 320px;
+  background: var(--muted-teal);
+  top: 8%;
+  left: 5%;
+  animation-delay: 0s;
+}
+
+.shape-2 {
+  width: 500px;
+  height: 380px;
+  background: var(--sage);
+  bottom: 8%;
+  right: 5%;
+  animation-delay: -10s;
+}
+
+@keyframes drift {
+  0% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  50% {
+    transform: translate(25px, -35px) scale(1.06) rotate(8deg);
+  }
+  100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+}
+
+/* Hand-Drawn Notebook Cards */
+.duo-card {
+  background: var(--card-bg);
+  border: 2.5px solid var(--card-border);
+  border-radius: 20px 24px 20px 24px / 24px 20px 24px 20px;
+  box-shadow: 0 8px 16px var(--shadow-color);
+  padding: 32px;
+  position: relative;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  z-index: 10;
+  transition: all 0.3s ease;
+}
+
+/* Notebook paper margin indicator */
+.duo-card::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  border-left: 1px dashed rgba(36, 76, 61, 0.15);
+  pointer-events: none;
+}
+
+/* Tactile Stamp-Style Buttons (Organic, non-clinical feel) */
+.duo-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Nunito', sans-serif;
+  font-weight: 800;
+  font-size: 14px;
+  text-transform: capitalize;
+  padding: 10px 20px;
+  border-radius: 16px 14px 18px 16px / 14px 16px 16px 18px;
+  border: 2.5px solid;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.12s ease;
+  transform: translateY(0);
+  user-select: none;
+  text-decoration: none;
+}
+
+.duo-btn::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 4px;
+  border-radius: 14px;
+  z-index: -1;
+  transition: all 0.12s ease;
+}
+
+.duo-btn:active {
+  transform: translateY(2px);
+}
+
+.duo-btn:active::after {
+  bottom: -1px;
+  height: 1px;
+}
+
+/* Organic Button Colors */
+.duo-btn-green {
+  background-color: var(--mint);
+  color: var(--evergreen);
+  border-color: var(--sage);
+}
+.duo-btn-green::after {
+  background-color: var(--sage-dark);
+}
+.duo-btn-green:hover {
+  background-color: var(--mint-dark);
+}
+
+.duo-btn-blue {
+  background-color: var(--mint);
+  color: var(--pacific-cyan);
+  border-color: var(--muted-teal);
+}
+.duo-btn-blue::after {
+  background-color: var(--sage);
+}
+.duo-btn-blue:hover {
+  background-color: var(--mint-dark);
+}
+
+.duo-btn-purple {
+  background-color: var(--lavender-blush);
+  color: var(--dark-amethyst);
+  border-color: var(--sage);
+}
+.duo-btn-purple::after {
+  background-color: var(--lavender-blush-dark);
+}
+.duo-btn-purple:hover {
+  background-color: var(--lavender-blush-dark);
+}
+
+.duo-btn-grey {
+  background-color: var(--lavender-blush);
+  color: var(--text-main);
+  border-color: var(--card-border);
+}
+.duo-btn-grey::after {
+  background-color: var(--lavender-blush-dark);
+}
+.duo-btn-grey:hover {
+  background-color: var(--lavender-blush-dark);
+}
+
+duo-btn-red {
+  background-color: #fde8e8;
+  color: #7a1f1f;
+  border-color: #f5b5b5;
+}
+duo-btn-red::after {
+  background-color: #f5b5b5;
+}
+duo-btn-red:hover {
+  background-color: #f8d3d3;
+}
+
+.sound-settings-modal .ant-modal-content {
+  background: rgba(248, 236, 238, 0.96);
+  border: 2px solid rgba(146, 166, 130, 0.18);
+  box-shadow: 0 18px 35px rgba(36, 76, 61, 0.14);
+}
+
+/* 4-6 Cycles per minute Breathing expand/contract (12 seconds per breath cycle) */
+.breathing-avatar-wrapper {
+  animation: breathe-rhythm 12s infinite ease-in-out;
+  transform-origin: center bottom;
+}
+
+@keyframes breathe-rhythm {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.035); /* Subtle, natural somatic inhale */
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Weightless Sway Drift under 5% screen width (Subtle float) */
+.swaying-avatar-wrapper {
+  animation: sway-drift 16s infinite ease-in-out;
+  transform-origin: center center;
+}
+
+@keyframes sway-drift {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate(6px, -4px) rotate(0.8deg);
+  }
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+}
+
+/* Custom Soft-Tech Slider for Volume Mix */
+.organic-slider {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--mint-dark);
+  outline: none;
+  margin: 12px 0;
+  transition: background 0.3s;
+}
+
+.organic-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--muted-teal);
+  border: 2.5px solid var(--lavender-blush);
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(36, 76, 61, 0.15);
+  transition: transform 0.1s ease;
+}
+
+.organic-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+.organic-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--muted-teal);
+  border: 2.5px solid var(--lavender-blush);
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(36, 76, 61, 0.15);
+  transition: transform 0.1s ease;
+}
+
+.organic-slider::-moz-range-thumb:hover {
+  transform: scale(1.15);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--sage);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
