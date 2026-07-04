@@ -1,43 +1,33 @@
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import pg from 'pg';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const { Pool } = pg;
 
-const dbPath = path.join(__dirname, 'chat.db');
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+});
 
 export async function initDb() {
-    const db = await open({
-        filename: dbPath,
-        driver: sqlite3.Database
-    });
-
-    await db.exec(`
+    await pool.query(`
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             username TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL
         );
-
+    `);
+    
+    await pool.query(`
         CREATE TABLE IF NOT EXISTS messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            userId INTEGER NOT NULL,
+            id SERIAL PRIMARY KEY,
+            "userId" INTEGER NOT NULL REFERENCES users(id),
             role TEXT NOT NULL,
             content TEXT NOT NULL,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (userId) REFERENCES users(id)
+            timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         );
     `);
-
-    return db;
 }
 
-export async function getDb() {
-    return open({
-        filename: dbPath,
-        driver: sqlite3.Database
-    });
+export function query(text, params) {
+    return pool.query(text, params);
 }
+

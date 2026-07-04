@@ -3,7 +3,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import Joi from 'joi';
 import crypto from 'crypto';
-import { getDb } from '../db/database.js';
+import { query } from '../db/database.js';
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'secret-key';
@@ -37,16 +37,15 @@ router.post('/signup', validatePayload, async (req, res, next) => {
         const { username, password } = req.body;
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        const db = await getDb();
 
-        const result = await db.run(
-            'INSERT INTO users (username, password) VALUES (?, ?)',
+        const result = await query(
+            'INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id',
             [username, hashedPassword]
         );
 
-        res.status(201).json({ message: 'User created successfully', userId: result.lastID });
+        res.status(201).json({ message: 'User created successfully', userId: result.rows[0].id });
     } catch (error) {
-        if (error.message.includes('UNIQUE constraint failed')) {
+        if (error.code === '23505' || error.message.includes('unique') || error.message.includes('duplicate')) {
             return res.status(409).json({ error: 'Username already exists' });
         }
         next(error); // Pass to global error handler
@@ -57,8 +56,8 @@ router.post('/login', validatePayload, async (req, res, next) => {
     try {
         const { username, password } = req.body;
 
-        const db = await getDb();
-        const user = await db.get('SELECT * FROM users WHERE username = ?', [username]);
+        const result = await query('SELECT * FROM users WHERE username = $1', [username]);
+        const user = result.rows[0];
 
         if (!user) {
             return res.status(401).json({ error: 'Invalid username or password' });
@@ -121,22 +120,20 @@ async function handleOAuthLogin(req, res, next, provider) {
         const userInfo = await verifyOAuthToken(idToken, provider);
         const email = userInfo.email;
 
-        const db = await getDb();
-        
-        // Check if user already exists
-        let user = await db.get('SELECT * FROM users WHERE username = ?', [email]);
+        const userResult = await query('SELECT * FROM users WHERE username = $1', [email]);
+        let user = userResult.rows[0];
 
         if (!user) {
             // User is new. Lock down their default configuration using a secure random password
             const fallbackPassword = crypto.randomBytes(32).toString('hex');
             const hashedPassword = await bcrypt.hash(fallbackPassword, 10);
             
-            const result = await db.run(
-                'INSERT INTO users (username, password) VALUES (?, ?)',
+            const result = await query(
+                'INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id',
                 [email, hashedPassword]
             );
             
-            user = { id: result.lastID, username: email };
+            user = { id: result.rows[0].id, username: email };
         }
 
         // Issue a signed JWT session token back to the frontend

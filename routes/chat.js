@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { getDb } from '../db/database.js';
+import { query } from '../db/database.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import { askTherapistModel } from '../aiClient.js';
 import fs from 'fs';
@@ -19,6 +19,47 @@ const upload = multer({ dest: uploadDir });
 const router = express.Router();
 
 router.use(authenticateToken);
+
+// POST /api/chat — text message handler
+router.post('/', async (req, res, next) => {
+    try {
+        const userId = req.user.userId;
+        const { message } = req.body;
+
+        if (!message || typeof message !== 'string') {
+            return res.status(400).json({ error: 'message is required' });
+        }
+
+        if (message.length > 300) {
+            return res.status(400).json({ error: 'Message length exceeds 300 characters' });
+        }
+
+        await query(
+            'INSERT INTO messages ("userId", role, content) VALUES ($1, $2, $3)',
+            [userId, 'user', message]
+        );
+
+        const historyResult = await query(
+            'SELECT role, content FROM messages WHERE "userId" = $1 ORDER BY timestamp DESC LIMIT 15',
+            [userId]
+        );
+        const chatHistory = historyResult.rows.reverse().map(row => ({ role: row.role, content: row.content }));
+
+        const aiText = await askTherapistModel(message, chatHistory);
+
+        await query(
+            'INSERT INTO messages ("userId", role, content) VALUES ($1, $2, $3)',
+            [userId, 'assistant', aiText]
+        );
+
+        res.json({ reply: aiText });
+    } catch (error) {
+        if (error.message.includes('Validation Error')) {
+            return res.status(400).json({ error: error.message });
+        }
+        next(error);
+    }
+});
 
 // Directive 2.1: Implement Production Speech-to-Text (STT) - Placeholder
 async function mockSpeechToText(audioFilePath) {
@@ -58,12 +99,11 @@ async function mockTextToSpeech(responseString) {
 router.get('/history', async (req, res, next) => {
     try {
         const userId = req.user.userId;
-        const db = await getDb();
-        const messages = await db.all(
-            'SELECT role, content, timestamp FROM messages WHERE userId = ? ORDER BY timestamp ASC',
+        const result = await query(
+            'SELECT role, content, timestamp FROM messages WHERE "userId" = $1 ORDER BY timestamp ASC',
             [userId]
         );
-        res.json({ history: messages });
+        res.json({ history: result.rows });
     } catch (error) {
         next(error);
     }
@@ -86,28 +126,19 @@ router.post('/voice-chat', upload.single('audio'), async (req, res, next) => {
             return res.status(400).json({ error: 'Message length exceeds 300 characters' });
         }
 
-        const db = await getDb();
-        
         // Extract resolved string literal and save as user's input text
-        await db.run(
-            'INSERT INTO messages (userId, role, content) VALUES (?, ?, ?)',
+        await query(
+            'INSERT INTO messages ("userId", role, content) VALUES ($1, $2, $3)',
             [userId, 'user', transcribedText]
         );
 
         // Directive 3.1: Enforce a Sliding-Window Query Limit
         // Read only the most recent 15 entries
-        const historyRows = await db.all(
-            'SELECT role, content FROM messages WHERE userId = ? ORDER BY timestamp DESC LIMIT 15',
+        const historyResult = await query(
+            'SELECT role, content FROM messages WHERE "userId" = $1 ORDER BY timestamp DESC LIMIT 15',
             [userId]
         );
-        // Reverse array to maintain chronological sequencing
-        historyRows.reverse();
-        
-        // Map to standard {role, content} format
-        const chatHistory = historyRows.map(row => ({
-            role: row.role,
-            content: row.content
-        }));
+        const chatHistory = historyResult.rows.reverse().map(row => ({ role: row.role, content: row.content }));
 
         // Call the mock AI model using structured anchor persona index array
         const aiResponse = await askTherapistModel(transcribedText, chatHistory);
@@ -116,8 +147,8 @@ router.post('/voice-chat', upload.single('audio'), async (req, res, next) => {
         const audioUrl = await mockTextToSpeech(aiResponse);
 
         // Save AI response to DB
-        await db.run(
-            'INSERT INTO messages (userId, role, content) VALUES (?, ?, ?)',
+        await query(
+            'INSERT INTO messages ("userId", role, content) VALUES ($1, $2, $3)',
             [userId, 'assistant', aiResponse]
         );
 
