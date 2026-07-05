@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "start": "node server.js",
-    "build": "vite build",
-    "vercel-build": "vite build",
+    "build": "vite build frontend -c frontend/vite.config.js --outDir ../dist --emptyOutDir",
+    "vercel-build": "vite build frontend -c frontend/vite.config.js --outDir ../dist --emptyOutDir",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "node test-endpoints.js"
