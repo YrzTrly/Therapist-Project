@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "outputDirectory": "frontend/dist",
+  "outputDirectory": "dist",
   "builds": [
     { "src": "server.js", "use": "@vercel/node" },
     { "src": "package.json", "use": "@vercel/static-build" }
