@@ -5,11 +5,10 @@ import { authenticateToken } from '../middleware/authMiddleware.js';
 import { askTherapistModel } from '../aiClient.js';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import os from 'os'; // 1. Added os module import
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const uploadDir = path.join(__dirname, '../uploads');
+// 2. Updated upload directory to use the serverless safe temporary directory
+const uploadDir = path.join(os.tmpdir(), 'therapist-uploads');
 
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
