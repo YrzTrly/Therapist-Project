@@ -17,12 +17,39 @@ if (!fs.existsSync(uploadDir)) {
 const upload = multer({ dest: uploadDir });
 const router = express.Router();
 
+// Simple in-memory guest tracking by client key (IP or forwarded address)
+const guestAttempts = new Map();
+const GUEST_LIMIT = 3;
+const GUEST_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function clientKey(req) {
+    return req.ip || req.headers['x-forwarded-for'] || req.connection && req.connection.remoteAddress || 'unknown';
+}
+
+function checkAndRecordGuestAttempt(req) {
+    const key = clientKey(req);
+    const now = Date.now();
+    let entry = guestAttempts.get(key);
+    if (!entry || now - entry.first > GUEST_WINDOW_MS) {
+        entry = { count: 0, first: now };
+    }
+
+    if (entry.count >= GUEST_LIMIT) {
+        guestAttempts.set(key, entry);
+        return { allowed: false, remaining: 0 };
+    }
+
+    entry.count += 1;
+    guestAttempts.set(key, entry);
+    return { allowed: true, remaining: GUEST_LIMIT - entry.count };
+}
+
 router.use(authenticateToken);
 
 // POST /api/chat — text message handler
 router.post('/', async (req, res, next) => {
     try {
-        const userId = req.user.userId;
+        const userId = req.user ? req.user.userId : null;
         const { message } = req.body;
 
         if (!message || typeof message !== 'string') {
@@ -33,23 +60,38 @@ router.post('/', async (req, res, next) => {
             return res.status(400).json({ error: 'Message length exceeds 300 characters' });
         }
 
-        await query(
-            'INSERT INTO messages ("userId", role, content) VALUES ($1, $2, $3)',
-            [userId, 'user', message]
-        );
+        // If no authenticated user, enforce guest attempt limits by IP/session
+        if (!userId) {
+            const { allowed, remaining } = checkAndRecordGuestAttempt(req);
+            if (!allowed) {
+                return res.status(403).json({ error: 'Guest message limit reached' });
+            }
+        } else {
+            // Persist authenticated user's message
+            await query(
+                'INSERT INTO messages ("userId", role, content) VALUES ($1, $2, $3)',
+                [userId, 'user', message]
+            );
+        }
 
-        const historyResult = await query(
-            'SELECT role, content FROM messages WHERE "userId" = $1 ORDER BY timestamp DESC LIMIT 15',
-            [userId]
-        );
-        const chatHistory = historyResult.rows.reverse().map(row => ({ role: row.role, content: row.content }));
+        // Load chat history only for authenticated users
+        let chatHistory = [];
+        if (userId) {
+            const historyResult = await query(
+                'SELECT role, content FROM messages WHERE "userId" = $1 ORDER BY timestamp DESC LIMIT 15',
+                [userId]
+            );
+            chatHistory = historyResult.rows.reverse().map(row => ({ role: row.role, content: row.content }));
+        }
 
         const aiText = await askTherapistModel(message, chatHistory);
 
-        await query(
-            'INSERT INTO messages ("userId", role, content) VALUES ($1, $2, $3)',
-            [userId, 'assistant', aiText]
-        );
+        if (userId) {
+            await query(
+                'INSERT INTO messages ("userId", role, content) VALUES ($1, $2, $3)',
+                [userId, 'assistant', aiText]
+            );
+        }
 
         res.json({ reply: aiText });
     } catch (error) {
@@ -97,7 +139,10 @@ async function mockTextToSpeech(responseString) {
 
 router.get('/history', async (req, res, next) => {
     try {
-        const userId = req.user.userId;
+        const userId = req.user ? req.user.userId : null;
+        if (!userId) {
+            return res.json({ history: [] });
+        }
         const result = await query(
             'SELECT role, content, timestamp FROM messages WHERE "userId" = $1 ORDER BY timestamp ASC',
             [userId]
@@ -110,7 +155,7 @@ router.get('/history', async (req, res, next) => {
 
 router.post('/voice-chat', upload.single('audio'), async (req, res, next) => {
     try {
-        const userId = req.user.userId;
+        const userId = req.user ? req.user.userId : null;
         const audioFile = req.file;
 
         if (!audioFile) {
@@ -125,19 +170,29 @@ router.post('/voice-chat', upload.single('audio'), async (req, res, next) => {
             return res.status(400).json({ error: 'Message length exceeds 300 characters' });
         }
 
-        // Extract resolved string literal and save as user's input text
-        await query(
-            'INSERT INTO messages ("userId", role, content) VALUES ($1, $2, $3)',
-            [userId, 'user', transcribedText]
-        );
+        if (!userId) {
+            const { allowed } = checkAndRecordGuestAttempt(req);
+            if (!allowed) {
+                return res.status(403).json({ error: 'Guest message limit reached' });
+            }
+        } else {
+            // Persist authenticated user's message
+            await query(
+                'INSERT INTO messages ("userId", role, content) VALUES ($1, $2, $3)',
+                [userId, 'user', transcribedText]
+            );
+        }
 
         // Directive 3.1: Enforce a Sliding-Window Query Limit
-        // Read only the most recent 15 entries
-        const historyResult = await query(
-            'SELECT role, content FROM messages WHERE "userId" = $1 ORDER BY timestamp DESC LIMIT 15',
-            [userId]
-        );
-        const chatHistory = historyResult.rows.reverse().map(row => ({ role: row.role, content: row.content }));
+        // Read only the most recent 15 entries for authenticated users
+        let chatHistory = [];
+        if (userId) {
+            const historyResult = await query(
+                'SELECT role, content FROM messages WHERE "userId" = $1 ORDER BY timestamp DESC LIMIT 15',
+                [userId]
+            );
+            chatHistory = historyResult.rows.reverse().map(row => ({ role: row.role, content: row.content }));
+        }
 
         // Call the mock AI model using structured anchor persona index array
         const aiResponse = await askTherapistModel(transcribedText, chatHistory);
@@ -145,11 +200,13 @@ router.post('/voice-chat', upload.single('audio'), async (req, res, next) => {
         // Run simulated TTS pipeline on the response string
         const audioUrl = await mockTextToSpeech(aiResponse);
 
-        // Save AI response to DB
-        await query(
-            'INSERT INTO messages ("userId", role, content) VALUES ($1, $2, $3)',
-            [userId, 'assistant', aiResponse]
-        );
+        if (userId) {
+            // Save AI response to DB for authenticated users
+            await query(
+                'INSERT INTO messages ("userId", role, content) VALUES ($1, $2, $3)',
+                [userId, 'assistant', aiResponse]
+            );
+        }
 
         // Return text string and audio file link back to client interface
         res.json({ 
