@@ -6,20 +6,26 @@ const FOUNDRY_ENDPOINT = (
 ).replace(/\/$/, "");
 const FOUNDRY_MODEL = process.env.FOUNDRY_MODEL || "gpt-4o";
 const FOUNDRY_DEPLOYMENT = process.env.FOUNDRY_DEPLOYMENT || "";
-const FOUNDRY_API_VERSION = process.env.FOUNDRY_API_VERSION || "2024-12-01";
+const FOUNDRY_API_VERSION = process.env.FOUNDRY_API_VERSION || "2024-06-01";
 const FOUNDRY_API_KEY =
   process.env.FOUNDRY_API_KEY ||
   process.env.AZURE_OPENAI_KEY ||
   process.env.OPENAI_API_KEY;
 
 function getCompletionsUrl() {
-  if (FOUNDRY_DEPLOYMENT) {
-    if (FOUNDRY_ENDPOINT.includes("/openai/v1")) {
-      return `${FOUNDRY_ENDPOINT}/deployments/${FOUNDRY_DEPLOYMENT}/chat/completions`;
-    }
+  if (!FOUNDRY_DEPLOYMENT) {
+    return `${FOUNDRY_ENDPOINT}/chat/completions`;
+  }
+
+  if (FOUNDRY_ENDPOINT.includes(".azure.com")) {
     return `${FOUNDRY_ENDPOINT}/deployments/${FOUNDRY_DEPLOYMENT}/chat/completions?api-version=${FOUNDRY_API_VERSION}`;
   }
-  return `${FOUNDRY_ENDPOINT}/chat/completions`;
+
+  if (FOUNDRY_ENDPOINT.includes("/openai/v1")) {
+    return `${FOUNDRY_ENDPOINT}/deployments/${FOUNDRY_DEPLOYMENT}/chat/completions`;
+  }
+
+  return `${FOUNDRY_ENDPOINT}/deployments/${FOUNDRY_DEPLOYMENT}/chat/completions?api-version=${FOUNDRY_API_VERSION}`;
 }
 
 export async function askTherapistModel(userMessage, chatHistory = []) {
