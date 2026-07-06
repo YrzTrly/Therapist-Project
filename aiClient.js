@@ -13,6 +13,10 @@ const FOUNDRY_API_KEY =
   process.env.OPENAI_API_KEY;
 
 function getCompletionsUrl() {
+  if (FOUNDRY_ENDPOINT.includes("/openai/v1")) {
+    return `${FOUNDRY_ENDPOINT}/chat/completions`;
+  }
+
   if (!FOUNDRY_DEPLOYMENT) {
     return `${FOUNDRY_ENDPOINT}/chat/completions`;
   }
@@ -21,11 +25,7 @@ function getCompletionsUrl() {
     return `${FOUNDRY_ENDPOINT}/deployments/${FOUNDRY_DEPLOYMENT}/chat/completions?api-version=${FOUNDRY_API_VERSION}`;
   }
 
-  if (FOUNDRY_ENDPOINT.includes("/openai/v1")) {
-    return `${FOUNDRY_ENDPOINT}/deployments/${FOUNDRY_DEPLOYMENT}/chat/completions`;
-  }
-
-  return `${FOUNDRY_ENDPOINT}/deployments/${FOUNDRY_DEPLOYMENT}/chat/completions?api-version=${FOUNDRY_API_VERSION}`;
+  return `${FOUNDRY_ENDPOINT}/deployments/${FOUNDRY_DEPLOYMENT}/chat/completions`;
 }
 
 export async function askTherapistModel(userMessage, chatHistory = []) {
