@@ -1129,11 +1129,15 @@ export default function App() {
 
       const simulatedOauthToken = `sso_token_${provider.toLowerCase()}_${Math.random().toString(36).substring(2, 11)}`;
       const endpoint = provider === 'Google' ? '/api/auth/google' : provider === 'Apple' ? '/api/auth/apple' : '/api/auth/microsoft';
+      const requestBody = {
+        idToken: simulatedOauthToken,
+        ...(provider === 'Google' ? { prompt: 'select_account' } : {})
+      };
 
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken: simulatedOauthToken })
+        body: JSON.stringify(requestBody)
       });
 
       const data = await response.json().catch(() => ({}));
