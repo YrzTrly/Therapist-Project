@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Input, Badge, ConfigProvider, message } from "antd";
+import { Input, Badge, ConfigProvider, Tooltip, message, Modal } from "antd";
 import {
   SendOutlined,
   ReloadOutlined,
@@ -857,6 +857,7 @@ const CompanionRenderer = ({ animalId, isTalking }) => {
 
 export default function App() {
   const [userId, setUserId] = useState(null);
+  const [step] = useState("chat");
 
   const [language, setLanguage] = useState("English");
   const [companion, setCompanion] = useState("koala");
@@ -905,7 +906,7 @@ export default function App() {
     if (savedUserId) {
       setUserId(savedUserId);
     }
-    
+
     setSelectedVoice(savedVoice);
   }, []);
 
@@ -1131,32 +1132,34 @@ export default function App() {
 
     // Voice selection: Female (calming, soothing) vs Male (grounding, warm)
     const voices = window.speechSynthesis.getVoices();
-    
+
     if (selectedVoice === "female") {
       // Soothing Female Voice
-      const femaleVoice = voices.find(v => 
-        v.name.toLowerCase().includes("female") || 
-        v.name.toLowerCase().includes("woman") ||
-        v.name.toLowerCase().includes("samantha") ||
-        v.name.toLowerCase().includes("victoria")
+      const femaleVoice = voices.find(
+        (v) =>
+          v.name.toLowerCase().includes("female") ||
+          v.name.toLowerCase().includes("woman") ||
+          v.name.toLowerCase().includes("samantha") ||
+          v.name.toLowerCase().includes("victoria"),
       );
       if (femaleVoice) utterance.voice = femaleVoice;
-      
+
       // Female voice profile: slightly higher pitch, gentle pace
-      utterance.rate = 0.85;  // Slightly slower than normal
-      utterance.pitch = 1.0;  // Natural pitch
+      utterance.rate = 0.85; // Slightly slower than normal
+      utterance.pitch = 1.0; // Natural pitch
     } else {
       // Grounding Male Voice
-      const maleVoice = voices.find(v => 
-        v.name.toLowerCase().includes("male") || 
-        v.name.toLowerCase().includes("man") ||
-        v.name.toLowerCase().includes("google uk english male") ||
-        v.name.toLowerCase().includes("david")
+      const maleVoice = voices.find(
+        (v) =>
+          v.name.toLowerCase().includes("male") ||
+          v.name.toLowerCase().includes("man") ||
+          v.name.toLowerCase().includes("google uk english male") ||
+          v.name.toLowerCase().includes("david"),
       );
       if (maleVoice) utterance.voice = maleVoice;
-      
+
       // Male voice profile: lower pitch, warm and deliberate
-      utterance.rate = 0.9;   // Slightly slower than normal
+      utterance.rate = 0.9; // Slightly slower than normal
       utterance.pitch = 0.95; // Warm, slightly deeper tone
     }
 
