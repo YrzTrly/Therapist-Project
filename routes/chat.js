@@ -1,7 +1,6 @@
 import express from "express";
 import multer from "multer";
 import { query } from "../db/database.js";
-import { authenticateToken } from "../middleware/authMiddleware.js";
 import { askTherapistModel } from "../aiClient.js";
 import fs from "fs";
 import path from "path";
@@ -16,40 +15,6 @@ if (!fs.existsSync(uploadDir)) {
 
 const upload = multer({ dest: uploadDir });
 const router = express.Router();
-
-// Simple in-memory guest tracking by client key (IP or forwarded address)
-const guestAttempts = new Map();
-const GUEST_LIMIT = 3;
-const GUEST_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
-
-function clientKey(req) {
-  return (
-    req.ip ||
-    req.headers["x-forwarded-for"] ||
-    (req.connection && req.connection.remoteAddress) ||
-    "unknown"
-  );
-}
-
-function checkAndRecordGuestAttempt(req) {
-  const key = clientKey(req);
-  const now = Date.now();
-  let entry = guestAttempts.get(key);
-  if (!entry || now - entry.first > GUEST_WINDOW_MS) {
-    entry = { count: 0, first: now };
-  }
-
-  if (entry.count >= GUEST_LIMIT) {
-    guestAttempts.set(key, entry);
-    return { allowed: false, remaining: 0 };
-  }
-
-  entry.count += 1;
-  guestAttempts.set(key, entry);
-  return { allowed: true, remaining: GUEST_LIMIT - entry.count };
-}
-
-router.use(authenticateToken);
 
 // POST /api/chat — text message handler
 router.post("/chat", async (req, res, next) => {
@@ -67,13 +32,7 @@ router.post("/chat", async (req, res, next) => {
         .json({ error: "Message length exceeds 300 characters" });
     }
 
-    // If no authenticated user, enforce guest attempt limits by IP/session
-    if (!userId) {
-      const { allowed, remaining } = checkAndRecordGuestAttempt(req);
-      if (!allowed) {
-        return res.status(403).json({ error: "Guest message limit reached" });
-      }
-    } else {
+    if (userId) {
       // Persist authenticated user's message
       await query(
         'INSERT INTO messages ("userId", role, content) VALUES ($1, $2, $3)',
@@ -187,12 +146,7 @@ router.post("/voice-chat", upload.single("audio"), async (req, res, next) => {
         .json({ error: "Message length exceeds 300 characters" });
     }
 
-    if (!userId) {
-      const { allowed } = checkAndRecordGuestAttempt(req);
-      if (!allowed) {
-        return res.status(403).json({ error: "Guest message limit reached" });
-      }
-    } else {
+    if (userId) {
       // Persist authenticated user's message
       await query(
         'INSERT INTO messages ("userId", role, content) VALUES ($1, $2, $3)',

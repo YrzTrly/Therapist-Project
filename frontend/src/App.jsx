@@ -1,26 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
+import { Input, Badge, ConfigProvider, message } from "antd";
 import {
-  Form,
-  Input,
-  Tooltip,
-  Badge,
-  ConfigProvider,
-  Modal,
-  message,
-} from "antd";
-import {
-  UserOutlined,
-  LockOutlined,
   SendOutlined,
   ReloadOutlined,
   LockFilled,
   SoundOutlined,
   HeartOutlined,
-  LoginOutlined,
-  LogoutOutlined,
-  GoogleOutlined,
-  AppleOutlined,
-  WindowsOutlined,
   CustomerServiceOutlined,
 } from "@ant-design/icons";
 import { motion, AnimatePresence } from "framer-motion";
@@ -851,27 +836,6 @@ const SVGCapybara = ({ isTalking }) => (
   </svg>
 );
 
-const AuthProviderButton = ({ provider, icon, style, label, onClick }) => (
-  <button
-    type="button"
-    className="duo-btn"
-    style={{
-      width: "100%",
-      justifyContent: "center",
-      gap: "10px",
-      fontSize: "13px",
-      textTransform: "none",
-      padding: "12px 0",
-      ...style,
-    }}
-    onClick={onClick}
-    aria-label={label}
-  >
-    {icon}
-    {label}
-  </button>
-);
-
 const CompanionRenderer = ({ animalId, isTalking }) => {
   switch (animalId) {
     case "koala":
@@ -892,13 +856,13 @@ const CompanionRenderer = ({ animalId, isTalking }) => {
 };
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userId, setUserId] = useState(null);
-  const [step, setStep] = useState("chat"); // 'chat' | 'signin'
 
   const [language, setLanguage] = useState("English");
   const [companion, setCompanion] = useState("koala");
-  const [messageCount, setMessageCount] = useState(0);
+
+  // Therapist Voice Selection
+  const [selectedVoice, setSelectedVoice] = useState("female"); // 'female' | 'male'
 
   // Calming Auditory Preferences
   const [voiceTone, setVoiceTone] = useState("comfort"); // 'deep' | 'whisper' | 'comfort'
@@ -934,20 +898,15 @@ export default function App() {
   const [breathingText, setBreathingText] = useState("");
   const [isBreathingActive, setIsBreathingActive] = useState(false);
 
-  // Modal alert
-  const [showLimitModal, setShowLimitModal] = useState(false);
-
   useEffect(() => {
-    const token = localStorage.getItem("theramindToken");
     const savedUserId = localStorage.getItem("theramindUserId");
-
-    if (token) {
-      setIsAuthenticated(true);
-    }
+    const savedVoice = localStorage.getItem("therapistVoice") || "female";
 
     if (savedUserId) {
       setUserId(savedUserId);
     }
+    
+    setSelectedVoice(savedVoice);
   }, []);
 
   const chatEndRef = useRef(null);
@@ -1145,7 +1104,7 @@ export default function App() {
     } catch (e) {}
   };
 
-  // Speech synthesis configuration
+  // Speech synthesis configuration with voice selection
   const speakText = (text, langName) => {
     if (!("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
@@ -1170,17 +1129,44 @@ export default function App() {
     };
     utterance.lang = langCodes[langName] || "en-US";
 
-    // Deluxe Voice Profile Configuration (low pitch, warm, deliberate slow tempo)
-    if (voiceTone === "deep") {
-      utterance.rate = 0.7; // 110-120 WPM
-      utterance.pitch = 0.75; // Low-pass filter feel
-    } else if (voiceTone === "whisper") {
-      utterance.rate = 0.65; // 100-110 WPM
-      utterance.pitch = 1.15; // Soft high whispered feel
+    // Voice selection: Female (calming, soothing) vs Male (grounding, warm)
+    const voices = window.speechSynthesis.getVoices();
+    
+    if (selectedVoice === "female") {
+      // Soothing Female Voice
+      const femaleVoice = voices.find(v => 
+        v.name.toLowerCase().includes("female") || 
+        v.name.toLowerCase().includes("woman") ||
+        v.name.toLowerCase().includes("samantha") ||
+        v.name.toLowerCase().includes("victoria")
+      );
+      if (femaleVoice) utterance.voice = femaleVoice;
+      
+      // Female voice profile: slightly higher pitch, gentle pace
+      utterance.rate = 0.85;  // Slightly slower than normal
+      utterance.pitch = 1.0;  // Natural pitch
     } else {
-      // Comforting Warm default
-      utterance.rate = 0.75; // 120-130 WPM
-      utterance.pitch = 0.95; // Cozy low
+      // Grounding Male Voice
+      const maleVoice = voices.find(v => 
+        v.name.toLowerCase().includes("male") || 
+        v.name.toLowerCase().includes("man") ||
+        v.name.toLowerCase().includes("google uk english male") ||
+        v.name.toLowerCase().includes("david")
+      );
+      if (maleVoice) utterance.voice = maleVoice;
+      
+      // Male voice profile: lower pitch, warm and deliberate
+      utterance.rate = 0.9;   // Slightly slower than normal
+      utterance.pitch = 0.95; // Warm, slightly deeper tone
+    }
+
+    // Apply tone-based adjustments (existing voice tone setting)
+    if (voiceTone === "deep") {
+      utterance.rate *= 0.85; // Make it even slower
+      utterance.pitch *= 0.9; // Make it deeper
+    } else if (voiceTone === "whisper") {
+      utterance.rate *= 0.95; // Slightly slower
+      utterance.pitch *= 1.1; // Slightly higher for whisper effect
     }
 
     utterance.onstart = () => setIsOwlSpeaking(true);
@@ -1194,9 +1180,8 @@ export default function App() {
   const handleSignOut = () => {
     localStorage.removeItem("theramindToken");
     localStorage.removeItem("theramindUserId");
-    setIsAuthenticated(false);
+    setUserId(null);
     setCompanion("koala");
-    setMessageCount(0);
     setAmbientSound("none");
     setVoiceTone("comfort");
     setMessages([
@@ -1244,296 +1229,108 @@ export default function App() {
     runStage();
   };
 
-  // Check guest action limit (3 messages)
-  const checkGuestAction = (onPassed) => {
-    if (!isAuthenticated && messageCount >= 3) {
-      setShowLimitModal(true);
-      return;
-    }
-    onPassed();
-  };
-
   // Send message
   const handleSend = async () => {
     if (!inputValue.trim()) return;
 
-    checkGuestAction(() => {
-      if (
-        audioContextRef.current &&
-        audioContextRef.current.state === "suspended"
-      ) {
-        audioContextRef.current.resume();
-      }
-
-      const userText = inputValue;
-      setInputValue("");
-      setMessageCount((prev) => prev + 1);
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now(),
-          role: "user",
-          content: userText,
-          translation:
-            language === "Spanish" ? userText : `[Translated to ${language}]`,
-        },
-      ]);
-
-      setIsTranslating(true);
-
-      const panicWords = [
-        "panic",
-        "anxious",
-        "scared",
-        "stress",
-        "ansioso",
-        "miedo",
-        "estrés",
-        "angustia",
-        "hilfe",
-        "angst",
-      ];
-      const hasPanic = panicWords.some((w) =>
-        userText.toLowerCase().includes(w),
-      );
-
-      const token = localStorage.getItem("theramindToken");
-      const payload = {
-        message: userText,
-        language,
-      };
-
-      fetch("/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify(payload),
-      })
-        .then(async (response) => {
-          const data = await response.json().catch(() => ({}));
-          if (!response.ok) {
-            throw new Error(data.error || "Chat request failed");
-          }
-
-          const aiText = data.reply || data.message || "I am here with you.";
-          const translationText =
-            language === "Spanish"
-              ? "Siento la carga de tus pensamientos. Estoy aquí para escucharte."
-              : "I feel the weight of your thoughts. I am here to listen.";
-
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: Date.now() + 1,
-              role: "ai",
-              content: aiText,
-              translation: translationText,
-            },
-          ]);
-
-          setIsTranslating(false);
-          speakText(aiText, language);
-
-          if (hasPanic) {
-            setTimeout(() => {
-              triggerBreathingExercise();
-            }, 2000);
-          }
-        })
-        .catch((error) => {
-          console.error("Chat request failed:", error);
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: Date.now() + 1,
-              role: "ai",
-              content:
-                "I am here with you. The connection is momentarily unavailable, but your words matter.",
-              translation:
-                "Estoy aquí contigo. La conexión está temporalmente indisponible, pero tus palabras importan.",
-            },
-          ]);
-          setIsTranslating(false);
-        });
-    });
-  };
-
-  // Conventional login submit
-  const handleLoginSubmit = async (values) => {
-    const username = values?.email?.trim();
-    const password = values?.password;
-
-    if (!username || !password) {
-      message.error({
-        content: "Please enter both email and password.",
-        key: "auth",
-      });
-      return;
+    if (
+      audioContextRef.current &&
+      audioContextRef.current.state === "suspended"
+    ) {
+      audioContextRef.current.resume();
     }
 
-    message.loading({ content: "Authenticating...", key: "auth" });
+    const userText = inputValue;
+    setInputValue("");
 
-    try {
-      const loginResponse = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
-      });
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        role: "user",
+        content: userText,
+        translation:
+          language === "Spanish" ? userText : `[Translated to ${language}]`,
+      },
+    ]);
 
-      const loginData = await loginResponse.json().catch(() => ({}));
+    setIsTranslating(true);
 
-      if (loginResponse.ok) {
-        localStorage.setItem("theramindToken", loginData.token);
-        localStorage.setItem("theramindUserId", String(loginData.userId));
-        setUserId(loginData.userId);
-        setIsAuthenticated(true);
-        setStep("chat");
-        message.success({
-          content: "Signed in securely.",
-          key: "auth",
-          duration: 4,
-        });
-        return;
-      }
+    const panicWords = [
+      "panic",
+      "anxious",
+      "scared",
+      "stress",
+      "ansioso",
+      "miedo",
+      "estrés",
+      "angustia",
+      "hilfe",
+      "angst",
+    ];
+    const hasPanic = panicWords.some((w) => userText.toLowerCase().includes(w));
 
-      if (loginResponse.status === 401) {
-        const signupResponse = await fetch("/api/auth/signup", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, password }),
-        });
+    const token = localStorage.getItem("theramindToken");
+    const payload = {
+      message: userText,
+      language,
+    };
 
-        const signupData = await signupResponse.json().catch(() => ({}));
-
-        if (signupResponse.ok || signupResponse.status === 201) {
-          const retryResponse = await fetch("/api/auth/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username, password }),
-          });
-          const retryData = await retryResponse.json().catch(() => ({}));
-
-          if (retryResponse.ok) {
-            localStorage.setItem("theramindToken", retryData.token);
-            localStorage.setItem("theramindUserId", String(retryData.userId));
-            setIsAuthenticated(true);
-            setStep("chat");
-            message.success({
-              content: "Account created and signed in.",
-              key: "auth",
-              duration: 4,
-            });
-            return;
-          }
+    fetch("/api/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.error || "Chat request failed");
         }
 
-        message.error({
-          content:
-            signupData.error || loginData.error || "Authentication failed.",
-          key: "auth",
-        });
-        return;
-      }
+        const aiText = data.reply || data.message || "I am here with you.";
+        const translationText =
+          language === "Spanish"
+            ? "Siento la carga de tus pensamientos. Estoy aquí para escucharte."
+            : "I feel the weight of your thoughts. I am here to listen.";
 
-      message.error({
-        content: loginData.error || "Authentication failed.",
-        key: "auth",
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now() + 1,
+            role: "ai",
+            content: aiText,
+            translation: translationText,
+          },
+        ]);
+
+        setIsTranslating(false);
+        speakText(aiText, language);
+
+        if (hasPanic) {
+          setTimeout(() => {
+            triggerBreathingExercise();
+          }, 2000);
+        }
+      })
+      .catch((error) => {
+        console.error("Chat request failed:", error);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now() + 1,
+            role: "ai",
+            content:
+              "I am here with you. The connection is momentarily unavailable, but your words matter.",
+            translation:
+              "Estoy aquí contigo. La conexión está temporalmente indisponible, pero tus palabras importan.",
+          },
+        ]);
+        setIsTranslating(false);
       });
-    } catch (error) {
-      console.error("Authentication error:", error);
-      message.error({
-        content: "Authentication handshake failed.",
-        key: "auth",
-      });
-    }
   };
-
-  // OAuth SSO token interceptor implementation
-  const handleSsoLogin = async (provider) => {
-    try {
-      message.loading({
-        content: `Connecting ${provider} securely...`,
-        key: "auth",
-      });
-
-      const simulatedOauthToken = `sso_token_${provider.toLowerCase()}_${Math.random().toString(36).substring(2, 11)}`;
-      const endpoint =
-        provider === "Google"
-          ? "/api/auth/google"
-          : provider === "Apple"
-            ? "/api/auth/apple"
-            : "/api/auth/microsoft";
-      const requestBody = {
-        idToken: simulatedOauthToken,
-        ...(provider === "Google" ? { prompt: "select_account" } : {}),
-      };
-
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
-      });
-
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(data.error || "OAuth authentication failed");
-      }
-
-      localStorage.setItem("theramindToken", data.token);
-      localStorage.setItem("theramindUserId", String(data.userId));
-      setUserId(data.userId);
-      setIsAuthenticated(true);
-      setStep("chat");
-      message.success({
-        content: `Connected securely via ${provider}.`,
-        key: "auth",
-        duration: 4,
-      });
-    } catch (error) {
-      console.error("OAuth authentication error:", error);
-      message.error({
-        content: "Authentication handshake failed.",
-        key: "auth",
-      });
-    }
-  };
-
-  const authProviders = [
-    {
-      provider: "Google",
-      icon: <GoogleOutlined style={{ color: "#EA4335" }} />,
-      style: {
-        backgroundColor: "#ffffff",
-        color: "#202124",
-        borderColor: "#dadce0",
-      },
-      label: "Sign in with Google",
-    },
-    {
-      provider: "Apple",
-      icon: <AppleOutlined style={{ color: "#ffffff" }} />,
-      style: {
-        backgroundColor: "#111111",
-        color: "#ffffff",
-        borderColor: "#333333",
-      },
-      label: "Sign in with Apple",
-    },
-    {
-      provider: "Microsoft",
-      icon: <WindowsOutlined style={{ color: "#00A4EF" }} />,
-      style: {
-        backgroundColor: "#ffffff",
-        color: "#202124",
-        borderColor: "#00A4EF",
-      },
-      label: "Sign in with Microsoft",
-    },
-  ];
 
   const openSoundSettings = () => setIsSoundSettingsOpen(true);
   const closeSoundSettings = () => setIsSoundSettingsOpen(false);
@@ -1603,7 +1400,6 @@ export default function App() {
               gap: "12px",
               cursor: "pointer",
             }}
-            onClick={() => setStep("chat")}
           >
             <span style={{ fontSize: "28px" }}>🌿</span>
             <div>
@@ -1632,7 +1428,7 @@ export default function App() {
 
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <Badge
-              status={isAuthenticated ? "success" : "default"}
+              status="success"
               text={
                 <span
                   style={{
@@ -1641,29 +1437,10 @@ export default function App() {
                     color: "var(--text-muted)",
                   }}
                 >
-                  {isAuthenticated ? t.authBadge : t.guestBadge}
+                  {t.authBadge}
                 </span>
               }
             />
-            {isAuthenticated ? (
-              <button
-                className="duo-btn duo-btn-red"
-                style={{ padding: "6px 14px", fontSize: "13px" }}
-                onClick={handleSignOut}
-              >
-                <LogoutOutlined style={{ marginRight: "6px" }} /> {t.signOutBtn}
-              </button>
-            ) : (
-              step === "chat" && (
-                <button
-                  className="duo-btn duo-btn-purple"
-                  style={{ padding: "6px 14px", fontSize: "13px" }}
-                  onClick={() => setStep("signin")}
-                >
-                  <LoginOutlined style={{ marginRight: "6px" }} /> {t.signInBtn}
-                </button>
-              )
-            )}
           </div>
         </div>
 
@@ -1817,9 +1594,7 @@ export default function App() {
                                 textTransform: "none",
                               }}
                               onClick={() => {
-                                checkGuestAction(() => {
-                                  setLanguage(lang);
-                                });
+                                setLanguage(lang);
                               }}
                             >
                               {lang}
@@ -1848,13 +1623,6 @@ export default function App() {
                         >
                           {t.companionLabel}
                         </span>
-                        {!isAuthenticated && (
-                          <Tooltip title={t.lockedTooltip}>
-                            <LockFilled
-                              style={{ color: "var(--dark-amethyst)" }}
-                            />
-                          </Tooltip>
-                        )}
                       </div>
 
                       <div
@@ -1888,15 +1656,10 @@ export default function App() {
                               style={{
                                 fontSize: "18px",
                                 padding: "6px",
-                                opacity:
-                                  !isAuthenticated && ani !== "koala" ? 0.4 : 1,
                               }}
-                              disabled={!isAuthenticated && ani !== "koala"}
                               onClick={() => {
-                                if (isAuthenticated) {
-                                  setCompanion(ani);
-                                  message.info(`${t[`${ani}Name`]} chosen.`);
-                                }
+                                setCompanion(ani);
+                                message.info(`${t[`${ani}Name`]} chosen.`);
                               }}
                             >
                               {labels[ani]}
@@ -1906,130 +1669,170 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Voice customization (Signed-In only) */}
-                    {isAuthenticated && (
-                      <div
-                        style={{
-                          borderTop: "1px dashed var(--sage)",
-                          paddingTop: "10px",
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: "10px",
-                        }}
-                      >
-                        {/* Voice Tones */}
-                        <div>
-                          <span
-                            style={{
-                              display: "block",
-                              fontSize: "12px",
-                              fontWeight: 800,
-                              color: "var(--text-muted)",
-                              marginBottom: "6px",
+                    {/* Voice customization */}
+                    <div
+                      style={{
+                        borderTop: "1px dashed var(--sage)",
+                        paddingTop: "10px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "10px",
+                      }}
+                    >
+                      {/* Therapist Voice Selection */}
+                      <div>
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: "12px",
+                            fontWeight: 800,
+                            color: "var(--text-muted)",
+                            marginBottom: "6px",
+                          }}
+                        >
+                          Therapist Voice
+                        </span>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr",
+                            gap: "4px",
+                          }}
+                        >
+                          <button
+                            className={`duo-btn ${selectedVoice === "female" ? "duo-btn-green" : "duo-btn-grey"}`}
+                            style={{ fontSize: "11px", padding: "6px" }}
+                            onClick={() => {
+                              setSelectedVoice("female");
+                              localStorage.setItem("therapistVoice", "female");
                             }}
                           >
-                            {t.toneLabel}
-                          </span>
-                          <div
-                            style={{
-                              display: "grid",
-                              gridTemplateColumns: "1fr 1fr 1fr",
-                              gap: "4px",
+                            ♀ Soothing Female
+                          </button>
+                          <button
+                            className={`duo-btn ${selectedVoice === "male" ? "duo-btn-green" : "duo-btn-grey"}`}
+                            style={{ fontSize: "11px", padding: "6px" }}
+                            onClick={() => {
+                              setSelectedVoice("male");
+                              localStorage.setItem("therapistVoice", "male");
                             }}
                           >
-                            {[
-                              { id: "deep", label: "Deep" },
-                              { id: "whisper", label: "Whisper" },
-                              { id: "comfort", label: "Comfort" },
-                            ].map((tone) => (
-                              <button
-                                key={tone.id}
-                                className={`duo-btn ${voiceTone === tone.id ? "duo-btn-green" : "duo-btn-grey"}`}
-                                style={{ fontSize: "10px", padding: "4px" }}
-                                onClick={() => setVoiceTone(tone.id)}
-                              >
-                                {tone.label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Ambient Layering Selector */}
-                        <div>
-                          <span
-                            style={{
-                              display: "block",
-                              fontSize: "12px",
-                              fontWeight: 800,
-                              color: "var(--text-muted)",
-                              marginBottom: "6px",
-                            }}
-                          >
-                            {t.ambientLabel}
-                          </span>
-                          <div
-                            style={{
-                              display: "grid",
-                              gridTemplateColumns: "1fr 1fr",
-                              gap: "4px",
-                              marginBottom: "8px",
-                            }}
-                          >
-                            {[
-                              { id: "none", label: "Silent" },
-                              { id: "waves", label: "Ocean" },
-                              { id: "rain", label: "Rain" },
-                              { id: "purr", label: "Purr" },
-                            ].map((noise) => (
-                              <button
-                                key={noise.id}
-                                className={`duo-btn ${ambientSound === noise.id ? "duo-btn-blue" : "duo-btn-grey"}`}
-                                style={{ fontSize: "10px", padding: "4px" }}
-                                onClick={() => {
-                                  setAmbientSound(noise.id);
-                                  if (
-                                    audioContextRef.current &&
-                                    audioContextRef.current.state ===
-                                      "suspended"
-                                  ) {
-                                    audioContextRef.current.resume();
-                                  }
-                                }}
-                              >
-                                {noise.label}
-                              </button>
-                            ))}
-                          </div>
-
-                          {/* Ambient Mix Volume Slider */}
-                          {ambientSound !== "none" && (
-                            <div>
-                              <span
-                                style={{
-                                  display: "block",
-                                  fontSize: "11px",
-                                  color: "var(--text-muted)",
-                                }}
-                              >
-                                {t.volumeLabel}:{" "}
-                                {Math.round(ambientVolume * 100)}%
-                              </span>
-                              <input
-                                type="range"
-                                min="0"
-                                max="1"
-                                step="0.05"
-                                value={ambientVolume}
-                                onChange={(e) =>
-                                  setAmbientVolume(parseFloat(e.target.value))
-                                }
-                                className="organic-slider"
-                              />
-                            </div>
-                          )}
+                            ♂ Grounding Male
+                          </button>
                         </div>
                       </div>
-                    )}
+
+                      {/* Voice Tones */}
+                      <div>
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: "12px",
+                            fontWeight: 800,
+                            color: "var(--text-muted)",
+                            marginBottom: "6px",
+                          }}
+                        >
+                          {t.toneLabel}
+                        </span>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr 1fr",
+                            gap: "4px",
+                          }}
+                        >
+                          {[
+                            { id: "deep", label: "Deep" },
+                            { id: "whisper", label: "Whisper" },
+                            { id: "comfort", label: "Comfort" },
+                          ].map((tone) => (
+                            <button
+                              key={tone.id}
+                              className={`duo-btn ${voiceTone === tone.id ? "duo-btn-green" : "duo-btn-grey"}`}
+                              style={{ fontSize: "10px", padding: "4px" }}
+                              onClick={() => setVoiceTone(tone.id)}
+                            >
+                              {tone.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Ambient Layering Selector */}
+                      <div>
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: "12px",
+                            fontWeight: 800,
+                            color: "var(--text-muted)",
+                            marginBottom: "6px",
+                          }}
+                        >
+                          {t.ambientLabel}
+                        </span>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr",
+                            gap: "4px",
+                            marginBottom: "8px",
+                          }}
+                        >
+                          {[
+                            { id: "none", label: "Silent" },
+                            { id: "waves", label: "Ocean" },
+                            { id: "rain", label: "Rain" },
+                            { id: "purr", label: "Purr" },
+                          ].map((noise) => (
+                            <button
+                              key={noise.id}
+                              className={`duo-btn ${ambientSound === noise.id ? "duo-btn-blue" : "duo-btn-grey"}`}
+                              style={{ fontSize: "10px", padding: "4px" }}
+                              onClick={() => {
+                                setAmbientSound(noise.id);
+                                if (
+                                  audioContextRef.current &&
+                                  audioContextRef.current.state === "suspended"
+                                ) {
+                                  audioContextRef.current.resume();
+                                }
+                              }}
+                            >
+                              {noise.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Ambient Mix Volume Slider */}
+                        {ambientSound !== "none" && (
+                          <div>
+                            <span
+                              style={{
+                                display: "block",
+                                fontSize: "11px",
+                                color: "var(--text-muted)",
+                              }}
+                            >
+                              {t.volumeLabel}: {Math.round(ambientVolume * 100)}
+                              %
+                            </span>
+                            <input
+                              type="range"
+                              min="0"
+                              max="1"
+                              step="0.05"
+                              value={ambientVolume}
+                              onChange={(e) =>
+                                setAmbientVolume(parseFloat(e.target.value))
+                              }
+                              className="organic-slider"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Actions */}
@@ -2107,22 +1910,6 @@ export default function App() {
                         Messages are not logged; session remains weightless.
                       </span>
                     </div>
-                    {!isAuthenticated && (
-                      <Badge
-                        status={messageCount >= 3 ? "error" : "warning"}
-                        text={
-                          <span
-                            style={{
-                              fontSize: "12px",
-                              fontWeight: 800,
-                              color: "var(--evergreen)",
-                            }}
-                          >
-                            {t.guestCap.replace("{left}", 3 - messageCount)}
-                          </span>
-                        }
-                      />
-                    )}
                   </div>
 
                   {/* Chat Bubbles */}
@@ -2507,282 +2294,42 @@ export default function App() {
                     </div>
                   </Modal>
 
-                  {/* Input form or Lock prompt */}
+                  {/* Input form */}
                   <div
                     style={{
                       borderTop: "2px dashed var(--sage)",
                       paddingTop: "16px",
                     }}
                   >
-                    {!isAuthenticated && messageCount >= 3 ? (
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "center",
-                          gap: "8px",
-                          padding: "12px",
-                          backgroundColor: "rgba(73, 44, 88, 0.04)",
-                          borderRadius: "16px",
-                          border: "2.5px dashed var(--dark-amethyst)",
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: "13px",
-                            fontWeight: 800,
-                            color: "var(--dark-amethyst)",
-                            textAlign: "center",
-                          }}
-                        >
-                          🚫 {t.guestLocked} - {t.loginSub}
-                        </span>
-                        <button
-                          className="duo-btn duo-btn-purple"
-                          style={{
-                            width: "100%",
-                            maxWidth: "240px",
-                            padding: "8px",
-                          }}
-                          onClick={() => setStep("signin")}
-                        >
-                          {t.signInBtn}
-                        </button>
-                      </div>
-                    ) : (
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          handleSend();
-                        }}
-                        style={{ display: "flex", gap: "12px" }}
-                      >
-                        <Input
-                          value={inputValue}
-                          onChange={(e) => setInputValue(e.target.value)}
-                          placeholder={t.typeThoughts}
-                          disabled={isTranslating}
-                          style={{ flexGrow: 1 }}
-                        />
-                        <button
-                          type="submit"
-                          className="duo-btn duo-btn-green"
-                          style={{ height: "46px", padding: "0 20px" }}
-                          disabled={!inputValue.trim() || isTranslating}
-                        >
-                          <SendOutlined />
-                        </button>
-                      </form>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {/* VIEW B: UNIFIED SECURE SIGN IN CARD */}
-            {step === "signin" && (
-              <motion.div
-                key="signin-card"
-                {...fadeTransition}
-                style={{ width: "100%", maxWidth: "420px" }}
-              >
-                <div className="duo-card" style={{ textAlign: "center" }}>
-                  <span
-                    style={{
-                      fontSize: "36px",
-                      display: "block",
-                      marginBottom: "12px",
-                    }}
-                  >
-                    🔒
-                  </span>
-                  <h2
-                    style={{
-                      fontSize: "24px",
-                      fontWeight: 900,
-                      color: "var(--dark-amethyst)",
-                      marginBottom: "8px",
-                    }}
-                  >
-                    {t.loginHeader}
-                  </h2>
-                  <p
-                    style={{
-                      color: "var(--text-muted)",
-                      fontSize: "14px",
-                      marginBottom: "24px",
-                    }}
-                  >
-                    {t.loginSub}
-                  </p>
-
-                  {/* 1. Conventional Sign-In */}
-                  <Form
-                    name="signin"
-                    onFinish={handleLoginSubmit}
-                    layout="vertical"
-                    requiredMark={false}
-                  >
-                    <Form.Item
-                      name="email"
-                      rules={[
-                        {
-                          required: true,
-                          type: "email",
-                          message: "Enter a valid email",
-                        },
-                      ]}
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handleSend();
+                      }}
+                      style={{ display: "flex", gap: "12px" }}
                     >
                       <Input
-                        prefix={<UserOutlined style={{ marginRight: "6px" }} />}
-                        placeholder={t.emailPlaceholder}
+                        value={inputValue}
+                        onChange={(e) => setInputValue(e.target.value)}
+                        placeholder={t.typeThoughts}
+                        disabled={isTranslating}
+                        style={{ flexGrow: 1 }}
                       />
-                    </Form.Item>
-
-                    <Form.Item
-                      name="password"
-                      rules={[{ required: true, message: "Enter password" }]}
-                    >
-                      <Input.Password
-                        prefix={<LockOutlined style={{ marginRight: "6px" }} />}
-                        placeholder={t.passwordPlaceholder}
-                      />
-                    </Form.Item>
-
-                    <Form.Item
-                      style={{ marginTop: "24px", marginBottom: "16px" }}
-                    >
                       <button
                         type="submit"
-                        className="duo-btn duo-btn-purple"
-                        style={{ width: "100%" }}
+                        className="duo-btn duo-btn-green"
+                        style={{ height: "46px", padding: "0 20px" }}
+                        disabled={!inputValue.trim() || isTranslating}
                       >
-                        {t.btnSignInAction}
+                        <SendOutlined />
                       </button>
-                    </Form.Item>
-                  </Form>
-
-                  {/* Divider line */}
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      margin: "20px 0",
-                      opacity: 0.6,
-                    }}
-                  >
-                    <div
-                      style={{
-                        flexGrow: 1,
-                        height: "1px",
-                        backgroundColor: "var(--sage)",
-                      }}
-                    />
-                    <span
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: 800,
-                        color: "var(--text-muted)",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      or connect securely
-                    </span>
-                    <div
-                      style={{
-                        flexGrow: 1,
-                        height: "1px",
-                        backgroundColor: "var(--sage)",
-                      }}
-                    />
-                  </div>
-
-                  {/* 2. Secure OAuth SSO Providers (Brand Mapped) */}
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "10px",
-                      marginBottom: "24px",
-                    }}
-                  >
-                    {authProviders.map(({ provider, icon, style, label }) => (
-                      <AuthProviderButton
-                        key={provider}
-                        provider={provider}
-                        icon={icon}
-                        label={label}
-                        style={style}
-                        onClick={() => handleSsoLogin(provider)}
-                      />
-                    ))}
-                  </div>
-
-                  <div
-                    style={{
-                      borderTop: "1px dashed var(--sage)",
-                      paddingTop: "16px",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "8px",
-                    }}
-                  >
-                    <button
-                      className="duo-btn duo-btn-grey"
-                      style={{ width: "100%" }}
-                      onClick={() => setStep("chat")}
-                    >
-                      {t.enterSession}
-                    </button>
+                    </form>
                   </div>
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
-
-        {/* Modal limit prompt */}
-        <Modal
-          title={
-            <span style={{ fontWeight: 900, color: "var(--dark-amethyst)" }}>
-              🕊️ Sanctuary Connection Prompt
-            </span>
-          }
-          open={showLimitModal}
-          onCancel={() => setShowLimitModal(false)}
-          footer={[
-            <button
-              key="close"
-              className="duo-btn duo-btn-grey"
-              style={{ padding: "6px 14px", marginRight: "8px" }}
-              onClick={() => setShowLimitModal(false)}
-            >
-              Back to Journal
-            </button>,
-            <button
-              key="signin"
-              className="duo-btn duo-btn-purple"
-              style={{ padding: "6px 14px" }}
-              onClick={() => {
-                setShowLimitModal(false);
-                setStep("signin");
-              }}
-            >
-              Sign In Now
-            </button>,
-          ]}
-        >
-          <p
-            style={{
-              fontSize: "14px",
-              lineHeight: 1.5,
-              color: "var(--evergreen)",
-            }}
-          >
-            {t.loginSub}
-          </p>
-        </Modal>
       </div>
     </ConfigProvider>
   );
